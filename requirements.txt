@@ -1,0 +1,9 @@
+opencv-python
+gradio
+mediapipe
+dlib
+imutils
+numpy
+torchlm
+pickle5
+```
