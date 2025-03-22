@@ -1,6 +1,5 @@
 opencv-python
-gradio
-mediapipe
+mediapipe==0.10.10
 dlib
 imutils
 numpy

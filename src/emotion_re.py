@@ -57,7 +57,7 @@ class EmotionRecognition:
             "Excited": 0
         }
         
-        print("表情识别模块已初始化")
+        print("表情识别模块已初始化 v2.3")
     
     def _get_full_model_points(self):
         """获取68点人脸模型的3D关键点"""
@@ -282,39 +282,55 @@ class EmotionRecognition:
         # 1. 专注状态（Focused）
         focused_conditions = [
             (yaw is not None and abs(yaw) < 20),           # 头部朝向前方
-            avg_ear > 0.22,                                # 眼睛睁开
+            (avg_ear > 0.22 and avg_ear < 0.29),                                # 眼睛睁开
             head_stable,                                   # 头部稳定
             not micro_expression,                          # 没有微表情干扰
             aus.get("AU4", False),                         # 未皱眉
         ]
-        if sum(focused_conditions) >= 3:  # 满足大部分条件
-            self.emotion_confidence["Focused"] += 0.35
+        if sum(focused_conditions) == 2:  
+            self.emotion_confidence["Focused"] += 0.31
+        if sum(focused_conditions) >= 3:  
+            self.emotion_confidence["Focused"] += 0.36
         
         # 2. 分心状态（Distraction）
         head_turning = (yaw is not None and abs(yaw) > 25)  
         frequent_movements = movement_magnitude > 3         
         
         if head_turning and frequent_movements:            
-            self.emotion_confidence["Distracted"] += 0.3   
+            self.emotion_confidence["Distracted"] += 0.33   
         elif head_turning or (micro_expression and movement_magnitude > 2):
-            self.emotion_confidence["Distracted"] += 0.3
+            self.emotion_confidence["Distracted"] += 0.33
         
         # 3. 困惑状态（Confusion）
-        if (aus.get("AU4_asymmetry", False) or     
-            (aus.get("AU6_7", False) or            
-            aus.get("AU25", False))):              
+        Confusion_conditions = [
+            aus.get("AU4_asymmetry", False),                 
+            aus.get("AU6_7", False),
+            aus.get("AU25", False),
+            (avg_ear > 0.16 and avg_ear < 0.21) 
+        ]
+        if sum(Confusion_conditions) >= 2:
             self.emotion_confidence["Confused"] += 0.35
     
         # 4. 疲劳状态（Fatigue）
-        if ((pitch is not None and pitch < -10) and   
-            avg_ear < 0.22 or                         
-            aus.get("AU26_27", False)):              
+        Fatigur_conditions = [
+            (pitch is not None and pitch < -10),
+            avg_ear < 0.17,
+            aus.get("AU6_7", False),
+            aus.get("AU26_27", False)
+        ]
+        if sum(Fatigur_conditions) == 2:
+            self.emotion_confidence["Fatigued"] += 0.3
+        if sum(Fatigur_conditions) >= 3:
             self.emotion_confidence["Fatigued"] += 0.36
         
         # 5. 兴奋状态（Excitement）
-        if (aus.get("AU12", False) or                
-            (avg_ear > 0.30 and                      
-            movement_magnitude > 1)):               
+        Excitement_conditions = [
+            aus.get("AU12", False), 
+            aus.get("AU25", False), 
+            avg_ear > 0.30,
+            movement_magnitude > 1
+        ]
+        if sum(Excitement_conditions) >= 3:
             self.emotion_confidence["Excited"] += 0.35
             
         # 确定最高可能的情绪状态
@@ -358,6 +374,10 @@ class EmotionRecognition:
         if active_aus:
             cv2.putText(result_image, f"AUs: {', '.join(active_aus)}", (10, 90), 
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
+
+        # 添加眼睛开合度显示
+        cv2.putText(result_image, f"Eye Ratio: {avg_ear:.3f}", (10, 120), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 1)
         
         return result_image
 

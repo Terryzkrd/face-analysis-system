@@ -8,8 +8,8 @@ import sys
 import threading
 import time
 import importlib
-import emotion_recognition
-importlib.reload(emotion_recognition)
+import emotion_re
+importlib.reload(emotion_re)
 
 from emotion_re import EmotionRecognition
 from face_recognition import FaceRecognition

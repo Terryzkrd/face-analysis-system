@@ -1,22 +1,17 @@
-# Face Analysis System
+# 基于dlib模型的人脸分析系统
 
-This project is a comprehensive face analysis system that integrates face recognition and emotion detection functionalities. It utilizes advanced machine learning models and computer vision techniques to analyze facial features and expressions in real-time.
+本项目是一个综合性的人脸分析系统，集成了人脸识别和情绪检测功能。它利用dlib模型和opencv技术，可实现实时分析面部特征和表情。
 
-## Project Structure
+## 项目结构
 
 ```
 face-analysis-system
 ├── src
-│   ├── core
-│   │   ├── __init__.py
-│   │   ├── face_recognition.py
-│   │   ├── emotion_recognition.py
-│   │   └── utils.py
-│   ├── ui
-│   │   ├── __init__.py
-│   │   └── app.py
-│   └── __init__.py
-├── models
+│   │── face_recognition.py
+│   │── emotion_recognition.py
+│   │── utils.py
+│   └── app.py
+├── model
 │   ├── shape_predictor_68_face_landmarks.dat
 │   └── dlib_face_recognition_resnet_model_v1.dat
 ├── data
@@ -33,36 +28,37 @@ face-analysis-system
 └── README.md
 ```
 
-## Features
+## 功能特点
 
-- **Face Recognition**: Detect and recognize faces using pre-trained models.
-- **Emotion Detection**: Analyze facial expressions to determine emotional states.
-- **Real-time Processing**: Utilize webcam input for live analysis.
-- **User Interface**: A user-friendly interface built with Gradio for easy interaction.
+- **人脸识别**: 使用基于dlib预训练模型检测和识别人脸。
+- **情绪检测**: 分析面部表情特征点以及头部姿态以确定情绪状态。
+- **实时处理**: 利用摄像头输入进行实时视频流分析。
 
-## Installation
+## 安装步骤
 
-1. Clone the repository:
+1. 克隆仓库：
    ```
    git clone <repository-url>
    cd face-analysis-system
    ```
 
-2. Install the required dependencies:
+2. 安装必要的依赖：
    ```
    pip install -r requirements.txt
    ```
+   需要安装pytorch，cpu即可，建议使用pytho3.10
 
-3. Download the necessary models and place them in the `models` directory.
+3. 载必要的模型并将它们放在model目录中。
+   ```
+   https://github.com/davisking/dlib-models
+   ```
 
 ## Usage
 
-To run the application, execute the following command:
+要运行应用程序，直接运行app.py，或执行以下命令：
 ```
 python main.py
 ```
-
-This will launch the Gradio interface where you can register faces, recognize them, and analyze emotions in real-time.
 
 ## Contributing
 
