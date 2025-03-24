@@ -7,12 +7,10 @@ import os
 import sys
 import threading
 import time
-import importlib
-import emotion_re
-importlib.reload(emotion_re)
 
-from emotion_re import EmotionRecognition
+from emotion_recognition import EmotionRecognition
 from face_recognition import FaceRecognition
+from student_monitor import ClassroomMonitor
 
 class FaceAnalysisApp:
     def __init__(self, window, window_title):
@@ -29,16 +27,19 @@ class FaceAnalysisApp:
         self.tab1 = ttk.Frame(self.tab_control)
         self.tab2 = ttk.Frame(self.tab_control)
         self.tab3 = ttk.Frame(self.tab_control)
+        self.tab4 = ttk.Frame(self.tab_control)
         
         self.tab_control.add(self.tab1, text='人脸注册与识别')
         self.tab_control.add(self.tab2, text='实时人脸识别')
         self.tab_control.add(self.tab3, text='表情状态检测')
+        self.tab_control.add(self.tab4, text='课堂状态监测')
         self.tab_control.pack(expand=1, fill="both")
         
         # 设置各个标签页的内容
         self.setup_registration_tab()
         self.setup_live_recognition_tab()
         self.setup_emotion_detection_tab()
+        self.setup_classroom_monitor_tab()
         
         # 视频捕获变量
         self.cap = None
@@ -322,7 +323,100 @@ class FaceAnalysisApp:
         self.stop_capture()
         self.window.destroy()
 
-# 添加在文件末尾
+    def setup_classroom_monitor_tab(self):
+        """设置课堂状态监测标签页"""
+        # 创建课堂监测对象
+        self.classroom_monitor = ClassroomMonitor()
+        
+        # 视频显示区域
+        self.monitor_canvas = tk.Canvas(self.tab4, width=800, height=600)
+        self.monitor_canvas.pack(pady=10)
+        
+        # 控制按钮框架
+        control_frame = ttk.Frame(self.tab4)
+        control_frame.pack(pady=5)
+        
+        # 开始监测按钮
+        self.start_monitor_btn = ttk.Button(
+            control_frame, 
+            text="开始课堂监测", 
+            command=lambda: self.start_capture(self.monitor_canvas, self.classroom_monitor.process_frame)
+        )
+        self.start_monitor_btn.pack(side="left", padx=5)
+        
+        # 停止按钮
+        self.stop_monitor_btn = ttk.Button(
+            control_frame, 
+            text="停止监测", 
+            command=self.stop_capture
+        )
+        self.stop_monitor_btn.pack(side="left", padx=5)
+        
+        # 生成理解度趋势图按钮
+        self.generate_trend_btn = ttk.Button(
+            control_frame, 
+            text="生成理解度趋势图", 
+            command=self.generate_understanding_trends
+        )
+        self.generate_trend_btn.pack(side="left", padx=5)
+        
+        # 添加说明文本
+        info_frame = ttk.LabelFrame(self.tab4, text="课堂状态监测说明")
+        info_frame.pack(pady=10, fill="x", padx=10)
+        
+        info_text = """
+        课堂状态监测系统使用说明:
+        
+        1. 点击"开始课堂监测"收集学生理解度数据
+        2. 监测过程中，可以实时查看每位学生的情绪状态和理解度分数
+        3. 完成监测后，点击"生成理解度趋势图"生成每位学生的理解度变化图表
+        """
+        ttk.Label(info_frame, text=info_text, justify="left").pack(pady=5)
+
+    def generate_understanding_trends(self):
+        """生成理解度趋势图"""
+        # 停止当前视频捕获
+        was_capturing = self.is_capturing
+        if was_capturing:
+            self.stop_capture()
+        
+        # 选择保存目录
+        output_dir = filedialog.askdirectory(title="选择趋势图保存位置")
+        if not output_dir:
+            return  # 用户取消操作
+        
+        # 显示进度对话框
+        progress = tk.Toplevel(self.window)
+        progress.title("生成趋势图")
+        progress.geometry("300x100")
+        progress.transient(self.window)
+        progress.grab_set()
+        
+        ttk.Label(progress, text="正在生成学生理解度趋势图...").pack(pady=20)
+        progress.update()
+        
+        # 生成趋势图
+        try:
+            report_count = self.classroom_monitor.generate_understanding_reports(output_dir)
+            progress.destroy()
+            
+            if report_count > 0:
+                if messagebox.askyesno("生成成功", 
+                                f"已成功生成{report_count}个学生的理解度趋势图。\n\n是否立即查看?"):
+                    # 打开文件夹
+                    if sys.platform == 'win32':
+                        os.startfile(output_dir)
+                    elif sys.platform == 'darwin':  # macOS
+                        os.system(f'open "{output_dir}"')
+                    else:  # Linux
+                        os.system(f'xdg-open "{output_dir}"')
+            else:
+                messagebox.showwarning("无法生成趋势图", 
+                                "没有足够的数据生成趋势图。\n请确保监测时间足够长，且至少有5个数据点。")
+        except Exception as e:
+            progress.destroy()
+            messagebox.showerror("错误", f"生成趋势图时出错:\n{str(e)}")
+
 
 def create_ui():
     """创建并启动人脸分析应用的用户界面"""

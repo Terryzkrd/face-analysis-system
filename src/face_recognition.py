@@ -141,6 +141,53 @@ class FaceRecognition:
             return f"已删除 '{name}' 的人脸记录"
         else:
             return f"未找到 '{name}' 的人脸记录"
+        
+    def identify_face(self, frame, face, gray=None):
+        """
+        识别单个人脸，返回ID和置信度
+        
+        Parameters:
+        - frame: 原始图像帧
+        - face: dlib人脸检测结果
+        - gray: 可选的灰度图像，如已计算可传入避免重复计算
+        
+        Returns:
+        - (face_id, confidence): 识别到的人脸ID和置信度，未识别则ID为"Unknown"
+        """
+        if gray is None:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            
+        # 获取人脸特征
+        landmarks = self.shape_predictor(gray, face)
+        face_descriptor = self.face_rec_model.compute_face_descriptor(frame, landmarks)
+        face_descriptor = np.array(face_descriptor)
+        
+        # 默认值
+        face_id = "Unknown"
+        confidence = 0
+        
+        # 数据库为空时直接返回默认值
+        if len(self.face_database) == 0:
+            return face_id, confidence, landmarks
+        
+        # 找最佳匹配
+        best_match = None
+        best_distance = float('inf')
+        
+        for name, face_data in self.face_database.items():
+            stored_descriptor = face_data['descriptor']
+            distance = np.linalg.norm(face_descriptor - stored_descriptor)
+            
+            if distance < best_distance:
+                best_distance = distance
+                best_match = name
+        
+        # 确认匹配结果
+        if best_distance < self.threshold:
+            face_id = best_match
+            confidence = 1 - best_distance
+            
+        return face_id, confidence, landmarks
     
     def recognize_face_stream(self, frame):
         """为实时视频流添加人脸识别处理方法"""
