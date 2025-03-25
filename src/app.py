@@ -7,10 +7,17 @@ import os
 import sys
 import threading
 import time
-
+import random
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from emotion_recognition import EmotionRecognition
 from face_recognition import FaceRecognition
 from student_monitor import ClassroomMonitor
+
+plt.rcParams['font.sans-serif'] = ['SimHei']  
+# 使用SimHei字体这样可以显示title中的中文，但这个不显示负号
+plt.rcParams['axes.unicode_minus'] = False  
+# 解决负号显示问题
 
 class FaceAnalysisApp:
     def __init__(self, window, window_title):
@@ -360,6 +367,17 @@ class FaceAnalysisApp:
         )
         self.generate_trend_btn.pack(side="left", padx=5)
         
+        # Matplotlib 图表
+        self.fig, self.ax = plt.subplots(figsize=(6, 3))
+        self.ax.set_title("学生理解度趋势")
+        self.ax.set_xlabel("时间 (秒)")
+        self.ax.set_ylabel("理解度分数 (0-100)")
+        self.ax.set_ylim(0, 100)
+        
+        self.canvas = FigureCanvasTkAgg(self.fig, master=self.tab4)
+        self.canvas.get_tk_widget().pack(pady=10)
+        
+        self.is_monitoring = False  # 监测状态
         # 添加说明文本
         info_frame = ttk.LabelFrame(self.tab4, text="课堂状态监测说明")
         info_frame.pack(pady=10, fill="x", padx=10)
@@ -374,49 +392,77 @@ class FaceAnalysisApp:
         ttk.Label(info_frame, text=info_text, justify="left").pack(pady=5)
 
     def generate_understanding_trends(self):
-        """生成理解度趋势图"""
-        # 停止当前视频捕获
-        was_capturing = self.is_capturing
-        if was_capturing:
-            self.stop_capture()
-        
-        # 选择保存目录
-        output_dir = filedialog.askdirectory(title="选择趋势图保存位置")
-        if not output_dir:
-            return  # 用户取消操作
-        
-        # 显示进度对话框
-        progress = tk.Toplevel(self.window)
-        progress.title("生成趋势图")
-        progress.geometry("300x100")
-        progress.transient(self.window)
-        progress.grab_set()
-        
-        ttk.Label(progress, text="正在生成学生理解度趋势图...").pack(pady=20)
-        progress.update()
-        
-        # 生成趋势图
-        try:
-            report_count = self.classroom_monitor.generate_understanding_reports(output_dir)
-            progress.destroy()
-            
-            if report_count > 0:
-                if messagebox.askyesno("生成成功", 
-                                f"已成功生成{report_count}个学生的理解度趋势图。\n\n是否立即查看?"):
-                    # 打开文件夹
-                    if sys.platform == 'win32':
-                        os.startfile(output_dir)
-                    elif sys.platform == 'darwin':  # macOS
-                        os.system(f'open "{output_dir}"')
-                    else:  # Linux
-                        os.system(f'xdg-open "{output_dir}"')
-            else:
-                messagebox.showwarning("无法生成趋势图", 
-                                "没有足够的数据生成趋势图。\n请确保监测时间足够长，且至少有5个数据点。")
-        except Exception as e:
-            progress.destroy()
-            messagebox.showerror("错误", f"生成趋势图时出错:\n{str(e)}")
+        """在 Tkinter 界面中显示每个学生的理解度趋势"""
+        if not self.classroom_monitor.student_understanding_data:
+            messagebox.showwarning("无法生成趋势图", "没有足够的数据生成趋势图。\n请确保监测时间足够长，至少有5个数据点。")
+            return
 
+        # 创建新窗口用于显示趋势图
+        trend_window = tk.Toplevel(self.window)
+        trend_window.title("学生理解度趋势")
+        trend_window.geometry("800x500")
+
+        # 创建 Matplotlib 图像
+        fig, ax = plt.subplots(figsize=(8, 4))
+        ax.set_title("学生理解度趋势")
+        ax.set_xlabel("时间 (秒)")
+        ax.set_ylabel("理解度分数 (0-100)")
+        ax.set_ylim(0, 100)
+
+        for student_id, data_points in self.classroom_monitor.student_understanding_data.items():
+            timestamps = [point[0] for point in data_points]
+            scores = [point[1] for point in data_points]
+            ax.plot(timestamps, scores, marker="o", linestyle="-", label=f"学生 {student_id}")
+
+        ax.legend()
+
+        # 嵌入 Tkinter Canvas
+        canvas = FigureCanvasTkAgg(fig, master=trend_window)
+        canvas.draw()
+        canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+
+    def start_monitoring(self):
+        """开始课堂监测并实时更新理解度趋势"""
+        if self.is_monitoring:
+            return
+
+        self.is_monitoring = True
+        self.classroom_monitor.student_understanding_data = {}  # 清空旧数据
+        self.ax.clear()
+
+        def update_graph():
+            start_time = time.time()
+            while self.is_monitoring:
+                elapsed_time = time.time() - start_time
+                student_id = random.choice(["S1", "S2", "S3"])  # 模拟学生 ID
+                understanding_score = random.randint(50, 100)  # 模拟数据，可替换成实际分析值
+
+                if student_id not in self.classroom_monitor.student_understanding_data:
+                    self.classroom_monitor.student_understanding_data[student_id] = []
+                self.classroom_monitor.student_understanding_data[student_id].append((elapsed_time, understanding_score))
+
+                # 更新 Matplotlib 图表
+                self.ax.clear()
+                self.ax.set_title("学生理解度趋势")
+                self.ax.set_xlabel("时间 (秒)")
+                self.ax.set_ylabel("理解度分数 (0-100)")
+                self.ax.set_ylim(0, 100)
+
+                for student_id, data_points in self.classroom_monitor.student_understanding_data.items():
+                    timestamps = [point[0] for point in data_points]
+                    scores = [point[1] for point in data_points]
+                    self.ax.plot(timestamps, scores, marker="o", linestyle="-", label=f"学生 {student_id}")
+
+                self.ax.legend()
+                self.canvas.draw()
+                time.sleep(1)  # 每秒更新一次数据
+
+        threading.Thread(target=update_graph, daemon=True).start()
+
+    def stop_monitoring(self):
+        """停止课堂监测"""
+        self.is_monitoring = False
 
 def create_ui():
     """创建并启动人脸分析应用的用户界面"""
