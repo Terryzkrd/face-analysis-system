@@ -74,7 +74,6 @@ class ClassroomMonitor:
             if emotion in weights:
                 weighted_score += weights[emotion] * score
         
-        # 限制分数范围在0-100之间
         final_score = weighted_score
         
         return final_score
