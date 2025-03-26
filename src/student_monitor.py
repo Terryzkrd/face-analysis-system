@@ -4,6 +4,7 @@ import time
 from collections import deque
 import os
 import matplotlib.pyplot as plt
+from matplotlib.figure import Figure  # 添加这一行导入
 from datetime import datetime
 from face_recognition import FaceRecognition
 from emotion_recognition import EmotionRecognition
@@ -45,6 +46,12 @@ class ClassroomMonitor:
             "Excited": "Excited",
             "Unknown": "Unknown"
         }
+        
+        # 实时趋势图相关
+        self.figure = None
+        self.ax = None
+        self.lines = {}  # 存储每个学生的曲线对象
+        self.colors = plt.cm.tab10.colors  # 预定义10种颜色
         
         print("课堂状态监测模块已初始化 v1.0")
     
@@ -119,15 +126,25 @@ class ClassroomMonitor:
             # 1. 使用优化后的人脸识别方法
             student_id, confidence, landmarks = self.face_recognition.identify_face(frame, face, gray)
             
-            # 2. 表情识别 - 使用已识别的面部特征点
-            landmarks_array = np.array([(landmarks.part(i).x, landmarks.part(i).y) for i in range(68)])
-
-            # 更新情绪状态
-            self.emotion_recognition.detect_expressions(frame)
-        
-            # 获取更新后的情绪分数
-            emotion_scores = self.emotion_recognition.emotion_confidence
-        
+            # 2. 从整帧中裁剪出人脸区域
+            face_image = frame[max(0, y1-30):min(frame.shape[0], y2+30), 
+                            max(0, x1-30):min(frame.shape[1], x2+30)]
+            
+            # 确保裁剪区域有效
+            if face_image.size == 0:
+                face_image = frame[y1:y2, x1:x2]  # 使用更小的区域
+            
+            if face_image.size > 0:
+                # 3. 对每个人脸单独进行情绪检测
+                self.emotion_recognition.detect_expressions(face_image)
+                
+                # 获取该人脸的情绪分数
+                emotion_scores = self.emotion_recognition.emotion_confidence
+            else:
+                # 如果裁剪失败，使用默认的情绪分数
+                emotion_scores = {"Focused": 20, "Distracted": 20, "Confused": 20, 
+                                "Fatigued": 20, "Excited": 20}
+            
             # 识别主要情绪 - 使用自定义阈值
             max_emotion = max(emotion_scores, key=emotion_scores.get)
             max_confidence = emotion_scores[max_emotion]
@@ -225,4 +242,61 @@ class ClassroomMonitor:
             report_count += 1
         
         return report_count
+    
+    def setup_realtime_chart(self):
+        """初始化实时趋势图"""
+        self.figure = Figure(figsize=(8, 5), dpi=100)
+        self.ax = self.figure.add_subplot(111)
+        
+        # 设置图表属性
+        self.ax.set_title("Real-time Understanding Trends")
+        self.ax.set_xlabel("Time (seconds)")
+        self.ax.set_ylabel("Understanding Score")
+        self.ax.set_ylim(0, 100)
+        self.ax.grid(True, linestyle='--', alpha=0.7)
+        
+        return self.figure
+        
+    def update_realtime_chart(self):
+        """更新实时趋势图"""
+        if self.figure is None or self.ax is None:
+            return
+            
+        # 清除当前的图例
+        if self.ax.get_legend() is not None:
+            self.ax.get_legend().remove()
+            
+        # 根据最新数据更新每个学生的曲线
+        for i, (student_id, data_points) in enumerate(self.student_understanding_data.items()):
+            if len(data_points) < 2:  # 至少需要两个点才能画线
+                continue
+                
+            timestamps = [point[0] for point in data_points]
+            scores = [point[1] for point in data_points]
+            
+            # 如果这个学生还没有曲线，创建新曲线
+            if student_id not in self.lines:
+                color_idx = len(self.lines) % len(self.colors)
+                line, = self.ax.plot(timestamps, scores, 
+                                    color=self.colors[color_idx], 
+                                    label=f"Student {student_id}",
+                                    linewidth=2)
+                self.lines[student_id] = line
+            else:
+                # 更新已有曲线
+                self.lines[student_id].set_data(timestamps, scores)
+        
+        # 动态调整X轴范围
+        if len(self.student_understanding_data) > 0:
+            all_times = [point[0] for data in self.student_understanding_data.values() for point in data]
+            if all_times:
+                max_time = max(all_times)
+                self.ax.set_xlim(0, max(30, max_time * 1.1))  # 留出一些空间
+                
+        # 添加图例
+        if self.lines:
+            self.ax.legend(loc='upper right')
+            
+        # 刷新图表
+        self.figure.canvas.draw_idle()
     

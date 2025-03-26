@@ -11,6 +11,7 @@ import time
 from emotion_recognition import EmotionRecognition
 from face_recognition import FaceRecognition
 from student_monitor import ClassroomMonitor
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 class FaceAnalysisApp:
     def __init__(self, window, window_title):
@@ -328,19 +329,27 @@ class FaceAnalysisApp:
         # 创建课堂监测对象
         self.classroom_monitor = ClassroomMonitor()
         
+        # 创建分割面板
+        paned_window = ttk.PanedWindow(self.tab4, orient=tk.HORIZONTAL)
+        paned_window.pack(fill="both", expand=True)
+        
+        # 左侧面板 - 视频显示
+        left_frame = ttk.Frame(paned_window)
+        paned_window.add(left_frame, weight=1)
+        
         # 视频显示区域
-        self.monitor_canvas = tk.Canvas(self.tab4, width=800, height=600)
+        self.monitor_canvas = tk.Canvas(left_frame, width=640, height=480)
         self.monitor_canvas.pack(pady=10)
         
         # 控制按钮框架
-        control_frame = ttk.Frame(self.tab4)
+        control_frame = ttk.Frame(left_frame)
         control_frame.pack(pady=5)
         
         # 开始监测按钮
         self.start_monitor_btn = ttk.Button(
             control_frame, 
             text="开始课堂监测", 
-            command=lambda: self.start_capture(self.monitor_canvas, self.classroom_monitor.process_frame)
+            command=self.start_classroom_monitoring
         )
         self.start_monitor_btn.pack(side="left", padx=5)
         
@@ -355,44 +364,70 @@ class FaceAnalysisApp:
         # 生成理解度趋势图按钮
         self.generate_trend_btn = ttk.Button(
             control_frame, 
-            text="生成理解度趋势图", 
+            text="生成理解度报告", 
             command=self.generate_understanding_trends
         )
         self.generate_trend_btn.pack(side="left", padx=5)
         
+        # 右侧面板 - 实时趋势图
+        right_frame = ttk.Frame(paned_window)
+        paned_window.add(right_frame, weight=1)
+        
+        # 趋势图标题
+        ttk.Label(right_frame, text="Real-time Understanding Trends", 
+                font=("Arial", 12, "bold")).pack(pady=5)
+        
+        # 创建matplotlib图形并嵌入tkinter
+        self.trend_figure = self.classroom_monitor.setup_realtime_chart()
+        self.trend_canvas = FigureCanvasTkAgg(self.trend_figure, right_frame)
+        self.trend_canvas.get_tk_widget().pack(fill="both", expand=True)
+        
         # 添加说明文本
-        info_frame = ttk.LabelFrame(self.tab4, text="课堂状态监测说明")
+        info_frame = ttk.LabelFrame(left_frame, text="Classroom Monitoring Guide")
         info_frame.pack(pady=10, fill="x", padx=10)
         
         info_text = """
-        课堂状态监测系统使用说明:
+        Real-time Classroom Monitoring System:
         
-        1. 点击"开始课堂监测"收集学生理解度数据
-        2. 监测过程中，可以实时查看每位学生的情绪状态和理解度分数
-        3. 完成监测后，点击"生成理解度趋势图"生成每位学生的理解度变化图表
+        1. Click "Start Monitoring" to collect student data
+        2. The trend chart will update automatically
+        3. Different colors represent different students
+        4. Click "Generate Report" to save trend images
         """
         ttk.Label(info_frame, text=info_text, justify="left").pack(pady=5)
 
-    def generate_understanding_trends(self):
-        """生成理解度趋势图"""
-        # 停止当前视频捕获
-        was_capturing = self.is_capturing
-        if was_capturing:
-            self.stop_capture()
+    def start_classroom_monitoring(self):
+        """开始课堂监测并启动趋势图更新"""
+        # 启动视频捕获
+        self.start_capture(self.monitor_canvas, self.classroom_monitor.process_frame)
         
+        # 启动趋势图更新定时器
+        self.update_trend_chart()
+
+    def update_trend_chart(self):
+        """定时更新趋势图"""
+        if self.is_capturing:
+            # 更新趋势图
+            self.classroom_monitor.update_realtime_chart()
+            
+            # 每秒更新一次
+            self.window.after(1000, self.update_trend_chart)
+
+    def generate_understanding_trends(self):
+        """生成理解度趋势图报告"""
         # 选择保存目录
-        output_dir = filedialog.askdirectory(title="选择趋势图保存位置")
+        output_dir = filedialog.askdirectory(title="Select Save Location")
         if not output_dir:
-            return  # 用户取消操作
+            return  # 用户取消
         
         # 显示进度对话框
         progress = tk.Toplevel(self.window)
-        progress.title("生成趋势图")
+        progress.title("Generating Reports")
         progress.geometry("300x100")
         progress.transient(self.window)
         progress.grab_set()
         
-        ttk.Label(progress, text="正在生成学生理解度趋势图...").pack(pady=20)
+        ttk.Label(progress, text="Generating understanding trend reports...").pack(pady=20)
         progress.update()
         
         # 生成趋势图
@@ -401,9 +436,8 @@ class FaceAnalysisApp:
             progress.destroy()
             
             if report_count > 0:
-                if messagebox.askyesno("生成成功", 
-                                f"已成功生成{report_count}个学生的理解度趋势图。\n\n是否立即查看?"):
-                    # 打开文件夹
+                if messagebox.askyesno("Success", 
+                                f"Generated {report_count} student trend reports.\n\nOpen folder now?"):
                     if sys.platform == 'win32':
                         os.startfile(output_dir)
                     elif sys.platform == 'darwin':  # macOS
@@ -411,11 +445,11 @@ class FaceAnalysisApp:
                     else:  # Linux
                         os.system(f'xdg-open "{output_dir}"')
             else:
-                messagebox.showwarning("无法生成趋势图", 
-                                "没有足够的数据生成趋势图。\n请确保监测时间足够长，且至少有5个数据点。")
+                messagebox.showwarning("No Data", 
+                                "Not enough data to generate trend reports.\nEnsure at least 5 data points per student.")
         except Exception as e:
             progress.destroy()
-            messagebox.showerror("错误", f"生成趋势图时出错:\n{str(e)}")
+            messagebox.showerror("Error", f"Error generating reports:\n{str(e)}")
 
 
 def create_ui():
